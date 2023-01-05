@@ -5,8 +5,7 @@ const NodeCache = require('node-cache');
 const request = require('request');
 const { Pool } = require('pg');
 const session = require('express-session');
-const path = require('path');
-
+const { check } = require('express-validator');
 
 const app = express()
 const cache = new NodeCache({ stdTTL: 120 });
@@ -156,15 +155,21 @@ app.get('/login', function (request, response) {
 
 });
 
+// A list of characters that are not allowed in the input fields
+const blacklist = '\'\"\/\<\>\;'
 // auth
 //	- Authenticates the user
 //	- Sets the session variables username and logged_in
-app.post('/auth', function (request, response) {
+app.post('/auth', [
+	check('username').isLength({ min: 1 }).trim().escape().blacklist(blacklist).replace(' ', ''),
+	check('password').isLength({ min: 1 }).trim().blacklist(blacklist).replace(' ', '')
+], function (request, response) {
 	// Capture the input fields
 	let username = request.body.username;
 	let password = request.body.password;
 	// Ensure the input fields exists and are not empty
 	if (username && password) {
+
 		// Execute SQL query that'll select the account from the database based on the specified username and password
 		query_string = "SELECT * FROM accounts WHERE username = '" + username + "' AND password = '" + password + "'";
 		pool.query(
@@ -193,6 +198,16 @@ app.post('/auth', function (request, response) {
 	}
 });
 
+
+
+const pool_write = new Pool({
+	user: process.env.USER_WRITE,
+	host: 'db.bit.io',
+	database: process.env.DB, // public database 
+	password: process.env.PASSWD_WRITE, // key from bit.io database page connect menu
+	port: 5432,
+	ssl: true,
+});
 /* Add user Page
 	- Renders the add user page
 
@@ -206,7 +221,11 @@ app.get('/add_user', function (request, response) {
 	}
 });
 //Add new user
-app.post('/send_user', function (request, response) {
+app.post('/send_user', [
+	check('username').isLength({ min: 5 }).trim().escape().blacklist(blacklist).replace(' ', ''),
+	check('password').isLength({ min: 5 }).trim().blacklist(blacklist).replace(' ', ''),
+	check('email').isEmail().trim().normalizeEmail()
+], function (request, response) {
 	if (request.session.loggedin) {
 		// Capture the input fields
 		let username = request.body.username;
@@ -217,8 +236,9 @@ app.post('/send_user', function (request, response) {
 			// Execute SQL query that'll select the account from the database based on the specified username and password
 			query_string = "SELECT MAX(id) FROM accounts";
 			pool.query(query_string, (err, res) => {
-				query_string = "INSERT INTO accounts  (id, username, password, email) VALUES ('" + res.rows[0].max + "', '" + username + "', '" + password + "', '" + email + "')";
-				pool.query(
+				id = res.rows[0].max + 1;
+				query_string = "INSERT INTO accounts  (id, username, password, email) VALUES ('" + id + "', '" + username + "', '" + password + "', '" + email + "')";
+				pool_write.query(
 					query_string,
 					function (error, results, fields) {
 						// If there is an issue with the query, output the error
@@ -233,7 +253,7 @@ app.post('/send_user', function (request, response) {
 			response.end();
 		}
 	} else {
-		request.redirect('/login');
+		response.redirect('/login');
 	}
 });
 
