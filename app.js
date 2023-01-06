@@ -1,50 +1,41 @@
 const express = require('express');
-const sync_fetch = require('sync-fetch');
 const browser = require('browser-detect');
 const NodeCache = require('node-cache');
 const request = require('request');
 const { Pool } = require('pg');
 const session = require('express-session');
-const path = require('path');
-
+const { check } = require('express-validator');
+require('dotenv').config()
 
 const app = express()
-const cache = new NodeCache({ stdTTL: 120 });
 const clientId = process.env.CLIENT_ID;
-const db_url = process.env.DB_URL;
+// const cache = new NodeCache({ stdTTL: 120 });
 
 
 // ################################ DateBase #######################################
-/* fetch_folder_DB
-	Fetches the folder DB and returns the rows
 
-	- path: path to the DB
-	- returns: rows from the DB
+/* User Database
+	- Stores the user information
+	- Id, username, password, email
 */
-function get_csv_db(url) {
-	const metadata = sync_fetch(url).text()
-	const split_metadata = metadata.split('\n')
-
-	let data = {};
-	for (let i in split_metadata) {
-		row = split_metadata[i].replace(/['"]+/g, '').split(',')
-		if (row[0] == 'folder_name') {
-			continue;
-		}
-		data[row[0]] = {
-			display_name: row[1],
-			description: row[2],
-			imgur_album_id: row[3]
-		};
-	}
-	return data;
-}
-
 const pool = new Pool({
 	user: process.env.USER,
 	host: 'db.bit.io',
 	database: process.env.DB, // public database 
 	password: process.env.PASSWD, // key from bit.io database page connect menu
+	port: 5432,
+	ssl: true,
+});
+
+/* Folder info Database
+	- Stores the folder information
+	- folder_name, display_name, description, imgur_album_id
+*/
+const img_pool = new Pool({
+	user: process.env.IMAGE_USER,
+	host: 'db.bit.io',
+	database: process.env.IMAGE_DB, // public database 
+	password: process.env.IMAGE_PASSWD, // key from bit.io database page connect menu
 	port: 5432,
 	ssl: true,
 });
@@ -73,26 +64,33 @@ var options = {
 }
 app.use(express.static('public', options))
 
-// This setup caches for the browser
-app.use((req, res, next) => { // Cache the responses
-	const cachedBody = cache.get(req.url);
-	if (cachedBody) {
-		res.send(cachedBody);
-		return;
-	} else {
-		res.sendResponse = res.send;
-		res.send = body => {
-			cache.set(req.url, body);
-			res.sendResponse(body);
+if (process.env.CACHING.toLocaleLowerCase() == 'on') {
+	console.log("Caching is enabled");
+	const cache = new NodeCache({ stdTTL: 120 });
+	// This setup caches for the browser
+	app.use((req, res, next) => { // Cache the responses
+		const cachedBody = cache.get(req.url);
+		if (cachedBody) {
+			res.send(cachedBody);
+			return;
+		} else {
+			res.sendResponse = res.send;
+			res.send = body => {
+				cache.set(req.url, body);
+				res.sendResponse(body);
+			}
+			next();
 		}
-		next();
-	}
-});
+	});
+} else {
+	console.log("Caching is disabled");
+}
+
 
 // ############################ Get Images ####################################
 /* getImageAlbum
 	- Gets all images in a imgur album by id
-
+	
 	- param: albumId - the id of the album
 	- return: image_list - the list of images in the album
 */
@@ -128,18 +126,18 @@ function getImageAlbum(albumId) {
 	});
 }
 
-// Gets the folder list from the csv
-let folder_data = get_csv_db(db_url);
 // ################################ Routing ########################################
-// - Everything below this is for router
-// - /login - login page
-// - /auth - authenticates the user
-// - /logout - logs the user out ***
-// - / - home page
-// - /folder - Displays all folders
-// - /{folder_name} - Displays all image in the "folder"
 
-// ################################ Auth Routing ########################################
+/* Everything below this is for routing
+	
+	- / -- home page
+	- /login -- login page
+	- /auth -- authenticates the user
+	- /logout -- logs the user out
+	- /folders -- Displays all folders
+	- /folders/:folder -- Displays all image in the "folder"
+*/
+//	### Auth Routing ###
 
 /* Login Page
 	- Renders the login page / login users in
@@ -156,23 +154,25 @@ app.get('/login', function (request, response) {
 
 });
 
+// A list of characters that are not allowed in the input fields
+const blacklist = '\'\"\/\<\>\;'
+
 // auth
 //	- Authenticates the user
 //	- Sets the session variables username and logged_in
-app.post('/auth', function (request, response) {
-	// Capture the input fields
+app.post('/auth', [
+	check('username').isLength({ min: 1 }).trim().escape().blacklist(blacklist).replace(' ', ''),
+	check('password').isLength({ min: 1 }).trim().blacklist(blacklist).replace(' ', '')
+], function (request, response) {
 	let username = request.body.username;
 	let password = request.body.password;
-	// Ensure the input fields exists and are not empty
 	if (username && password) {
 		// Execute SQL query that'll select the account from the database based on the specified username and password
 		query_string = "SELECT * FROM accounts WHERE username = '" + username + "' AND password = '" + password + "'";
 		pool.query(
 			query_string,
 			function (error, results, fields) {
-				// If there is an issue with the query, output the error
 				if (error) throw error;
-				// If the account exists
 				if (results.rows.length > 0) {
 					// Authenticate the user
 					request.session.loggedin = true;
@@ -180,7 +180,6 @@ app.post('/auth', function (request, response) {
 					// Redirect to home page
 					response.redirect('/folders');
 				} else {
-					// response.send('Incorrect Username and/or Password!');
 					request.session.err_msg = "Incorrect Username and/or Password!";
 					response.redirect('/login');
 
@@ -195,7 +194,7 @@ app.post('/auth', function (request, response) {
 
 /* Add user Page
 	- Renders the add user page
-
+	
 */
 app.get('/add_user', function (request, response) {
 	// Render login template
@@ -205,20 +204,31 @@ app.get('/add_user', function (request, response) {
 		request.redirect('/login');
 	}
 });
-//Add new user
-app.post('/send_user', function (request, response) {
+//Adds new user
+app.post('/send_user', [
+	check('username').isLength({ min: 5 }).trim().escape().blacklist(blacklist).replace(' ', ''),
+	check('password').isLength({ min: 5 }).trim().blacklist(blacklist).replace(' ', ''),
+	check('email').isEmail().trim().normalizeEmail()
+], function (request, response) {
 	if (request.session.loggedin) {
-		// Capture the input fields
 		let username = request.body.username;
 		let password = request.body.password;
 		let email = request.body.email;
-		// Ensure the input fields exists and are not empty
 		if (username && password) {
-			// Execute SQL query that'll select the account from the database based on the specified username and password
-			query_string = "SELECT MAX(id) FROM accounts";
+			//Connect to the database with the db write user
+			const pool_write = new Pool({
+				user: process.env.USER_WRITE,
+				host: 'db.bit.io',
+				database: process.env.DB, // public database 
+				password: process.env.PASSWD_WRITE, // key from bit.io database page connect menu
+				port: 5432,
+				ssl: true,
+			});
+			query_string = "SELECT MAX(id) FROM accounts"; //Gets the current highest id
 			pool.query(query_string, (err, res) => {
-				query_string = "INSERT INTO accounts  (id, username, password, email) VALUES ('" + res.rows[0].max + "', '" + username + "', '" + password + "', '" + email + "')";
-				pool.query(
+				id = res.rows[0].max + 1;
+				query_string = "INSERT INTO accounts  (id, username, password, email) VALUES ('" + id + "', '" + username + "', '" + password + "', '" + email + "')";
+				pool_write.query(
 					query_string,
 					function (error, results, fields) {
 						// If there is an issue with the query, output the error
@@ -228,12 +238,13 @@ app.post('/send_user', function (request, response) {
 						response.end();
 					});
 			});
+			pool_write.end(); // End the connection to the database
 		} else {
 			response.send('Please enter Username and Password!');
 			response.end();
 		}
 	} else {
-		request.redirect('/login');
+		response.redirect('/login');
 	}
 });
 
@@ -243,15 +254,25 @@ app.get('/logout', function (request, response) {
 	response.redirect('/login');
 });
 
-// ################################ Main Routing ########################################
+// 	### Main Routing ###
 /* Folder page
 	- Waits for data from db to be loaded in, then renders the index.html
+	
+	- Checks if the user is logged in, then gets the folders from the image db
 */
 app.get('/folders', function (req, res) {
 	if (req.session.loggedin) {
-		folder_data = get_csv_db(db_url);
-		res.render('pages/folders.ejs', {
-			folders: Object.keys(folder_data)
+		query_string = 'SELECT folder_name FROM folders';
+		img_pool.query(query_string, (err, resp) => {
+
+			let folder_list = [];
+			for (const row of resp.rows) {
+				folder_list.push(row.folder_name);
+			}
+
+			res.render('pages/folders.ejs', {
+				folders: folder_list,
+			});
 		});
 	} else {
 		res.redirect('/login');
@@ -259,39 +280,58 @@ app.get('/folders', function (req, res) {
 });
 
 /* Folder page
-	- Waits for data from db to be loaded in, then gets the image list from imgur
+	- Gets the folder name from the url and renders the template_grid.ejs
+	
+	- Checks if the user is logged in, then gets the folder data from the image db
+	- Then gets the images from the corresponding imgur album
 */
-for (const folder of Object.keys(folder_data)) {
-	if (folder == 'dick-den-2d') {
-		continue;
-	}
-	const imgPath = '/' + folder;
-	getImageAlbum(folder_data[folder]['imgur_album_id'])
-		.then((image_list) => {
-			app.get(imgPath, function (req, res) {
-				if (req.session.loggedin) {
-					var title = folder_data[folder]['display_name'];
-					var description = folder_data[folder]['description'];
+app.get('/folders/:folder', [check('folder').trim().blacklist(blacklist).replace(' ', '')], function (req, res) {
+	if (req.session.loggedin) {
+		let folder = req.params.folder;
+		query_string = "SELECT * FROM folders  WHERE folder_name = '" + folder + "'";
+		img_pool.query(query_string, (err, resp) => {
+			//Lines 334-342: Gets images from imgur
+			getImageAlbum(resp.rows[0].imgur_album_id)
+				.then((image_list) => {
+					var scroll = folder + '/images'
+					var title = resp.rows[0].display_name;
+					var description = resp.rows[0].description;
 					const isMobile = browser(req.headers['user-agent']).mobile;
 					res.render(isMobile ? "pages/template_grid_mobile.ejs" : "pages/template_grid.ejs", {
 						image_links: image_list,
 						title: title,
-						description: description
+						description: description,
+						scroller: scroll
 					});
-				} else {
-					res.redirect('/login');
-				}
-			})
+				});
 		});
-}
+	} else {
+		res.redirect('/login');
+	}
+});
+
 
 /* Image Page
 */
-app.get('/image', function (req, res) {
-	res.render('pages/template_image.ejs', {
-		disp_link: req.query.img
-	});
-})
+app.get('/folders/:folder/images', [check('folder').trim().blacklist(blacklist).replace(' ', '')], function (req, res) {
+	let folder = req.params.folder;
+	if (req.session.loggedin) {
+		folder = req.params.folder;
+		query_string = "SELECT * FROM folders  WHERE folder_name = '" + folder + "'";
+		img_pool.query(query_string, (err, resp) => {
+			getImageAlbum(resp.rows[0].imgur_album_id)
+				.then((image_list) => {
+					var title = resp.rows[0].display_name;
+					res.render("pages/images.ejs", {
+						image_links: image_list,
+						title: title,
+					});
+				});
+		});
+	} else {
+		res.redirect('/login');
+	}
+});
 
 
 // ################################# Export #################################

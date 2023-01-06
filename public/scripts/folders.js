@@ -8,7 +8,7 @@ function loadFolders(folderList) {
         const linkText = document.createTextNode(folder);
         a.appendChild(linkText);
         a.title = folder;
-        a.href = folder;
+        a.href = "/folders/" + folder;
         divBox.appendChild(a);
         folderContainer.appendChild(divBox);
     }
