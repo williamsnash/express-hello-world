@@ -1,0 +1,44 @@
+<html>
+
+<head>
+    <title>Image Scroller</title>
+    <link rel="stylesheet" href="/css/images.css">
+    <link rel="icon" href="/favicon/favicon.ico" />
+</head>
+
+<body>
+    <div class="header">
+        <!-- <h1>Image Scroller</h1> -->
+        <a class="header_link" href="#" onclick="window.history.back();" target="_self">
+            <h1>
+                <%= title %>
+            </h1>
+        </a>
+    </div>
+    <div id="image">
+        <div id="scr_image">
+            <script>
+                var images = '<%= image_links %>'.split(',');
+                var currentImageIndex = 0;
+                function updateImageDiv() {
+                    var imageUrl = "url('" + images[currentImageIndex] + "')";
+                    var imageDiv = document.getElementById("image");
+                    imageDiv.style.backgroundImage = imageUrl;
+                    imageDiv.style.backgroundSize = "contain";
+                    imageDiv.style.backgroundPosition = "center";
+                    imageDiv.style.backgroundRepeat = "no-repeat";
+                }
+
+                updateImageDiv();
+                window.addEventListener("resize", updateImageDiv);
+
+                setInterval(function () {
+                    currentImageIndex = (currentImageIndex + 1) % images.length;
+                    updateImageDiv();
+                }, 3000);
+            </script>
+        </div>
+    </div>
+</body>
+
+</html>
