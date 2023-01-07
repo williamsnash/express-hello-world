@@ -134,8 +134,9 @@ function getImageAlbum(albumId) {
 	- /login -- login page
 	- /auth -- authenticates the user
 	- /logout -- logs the user out
-	- /folders -- Displays all folders
-	- /folders/:folder -- Displays all image in the "folder"
+	- /home -- displays what server the user can access
+	- /:server -- Displays all folders in the server
+	- /:server/:folder -- Displays all image in the "folder"
 */
 //	### Auth Routing ###
 
@@ -178,7 +179,7 @@ app.post('/auth', [
 					request.session.loggedin = true;
 					request.session.username = username;
 					// Redirect to home page
-					response.redirect('/folders');
+					response.redirect('/home');
 				} else {
 					request.session.err_msg = "Incorrect Username and/or Password!";
 					response.redirect('/login');
@@ -254,27 +255,55 @@ app.get('/logout', function (request, response) {
 	response.redirect('/login');
 });
 
-// 	### Main Routing ###
-/* Folder page
-	- Waits for data from db to be loaded in, then renders the index.html
-	
-	- Checks if the user is logged in, then gets the folders from the image db
-*/
-app.get('/folders', function (req, res) {
-	if (req.session.loggedin) {
-		query_string = 'SELECT folder_name, display_name FROM folders';
-		img_pool.query(query_string, (err, resp) => {
+// ######### Main Routing #########
 
-			let folder_list = [];
-			let display_list = [];
+/* can_access
+	- Checks if the user has access to the server
+
+	- params: server - The server name
+	- params: username - The username of the user
+
+	- returns: A promise that resolves to- 
+				true if the user has access to the server,
+				false otherwise
+*/
+function can_access(server, username) {
+	return new Promise((resolve, reject) => {
+		query_string = 'SELECT * FROM ' + username + ' WHERE server_name = \'' + server.toLowerCase() + '\'';
+		pool.query(query_string, (err, resp) => {
+			if (resp.rows.length > 0) {
+				if (resp.rows[0].can_access == 'true') {
+					resolve(true);
+				} else {
+					resolve(false);
+				}
+			} else {
+				resolve(false);
+			}
+		});
+	});
+}
+
+
+/* Server Home Page
+	- Renders the home page
+	- Queries the database for the servers that the user has access to
+*/
+app.get('/home', function (req, res) {
+	if (req.session.loggedin) {
+		query_string = 'SELECT * FROM ' + req.session.username;
+		pool.query(query_string, (err, resp) => {
+			// console.table(resp.rows);
+			let servers = [];
 			for (const row of resp.rows) {
-				folder_list.push(row.folder_name);
-				display_list.push(row.display_name);
+				if (row.can_access.toLowerCase() == 'true') {
+					// console.log(row.server_name);
+					servers.push(row.server_name);
+				}
 			}
 
-			res.render('pages/folders.ejs', {
-				folders: folder_list.sort(),
-				display: display_list.sort()
+			res.render('pages/home.ejs', {
+				folders: servers
 			});
 		});
 	} else {
@@ -283,58 +312,117 @@ app.get('/folders', function (req, res) {
 });
 
 /* Folder page
+	- Waits for data from db to be loaded in, then renders the index.html
+	
+	- Checks if the user is logged in, then gets the folders from the image db
+*/
+app.get('/:server', [
+	check('server').trim().blacklist(blacklist).replace(' ', '')],
+	function (req, res) {
+		let server = req.params.server;
+		if (req.session.loggedin) {
+			can_access(server, req.session.username).then((access) => {
+				if (access) {
+					query_string = 'SELECT folder_name, display_name FROM ' + server.toLowerCase();
+					img_pool.query(query_string, (err, resp) => {
+
+						let folder_list = [];
+						let display_list = [];
+						for (const row of resp.rows) {
+							folder_list.push(row.folder_name);
+							display_list.push(row.display_name);
+						}
+
+						res.render('pages/folders.ejs', {
+							server: server,
+							folders: folder_list.sort(),
+							display: display_list.sort()
+						});
+					});
+				} else {
+					res.redirect('/home');
+				}
+			});
+		} else {
+			res.redirect('/login');
+		}
+	});
+
+/* Folder page
 	- Gets the folder name from the url and renders the template_grid.ejs
 	
 	- Checks if the user is logged in, then gets the folder data from the image db
 	- Then gets the images from the corresponding imgur album
 */
-app.get('/folders/:folder', [check('folder').trim().blacklist(blacklist).replace(' ', '')], function (req, res) {
-	if (req.session.loggedin) {
-		let folder = req.params.folder;
-		query_string = "SELECT * FROM folders  WHERE folder_name = '" + folder + "'";
-		img_pool.query(query_string, (err, resp) => {
-			//Lines 334-342: Gets images from imgur
-			getImageAlbum(resp.rows[0].imgur_album_id)
-				.then((image_list) => {
-					var scroll = folder + '/images'
-					var title = resp.rows[0].display_name;
-					var description = resp.rows[0].description;
-					const isMobile = browser(req.headers['user-agent']).mobile;
-					res.render(isMobile ? "pages/template_grid_mobile.ejs" : "pages/template_grid.ejs", {
-						image_links: image_list,
-						title: title,
-						description: description,
-						scroller: scroll
+app.get('/:server/:folder', [
+	check('server').trim().blacklist(blacklist).replace(' ', ''),
+	check('folder').trim().blacklist(blacklist).replace(' ', '')],
+	function (req, res) {
+		if (req.session.loggedin) {
+			let folder = req.params.folder;
+			let server = req.params.server;
+			can_access(server, req.session.username).then((access) => {
+				if (access) {
+					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = '" + folder + "'";
+					img_pool.query(query_string, (err, resp) => {
+						//Lines 334-342: Gets images from imgur
+						getImageAlbum(resp.rows[0].imgur_album_id)
+							.then((image_list) => {
+								var scroll = folder + '/images'
+								var title = resp.rows[0].display_name;
+								var description = resp.rows[0].description;
+								const isMobile = browser(req.headers['user-agent']).mobile;
+								res.render(isMobile ? "pages/template_grid_mobile.ejs" : "pages/template_grid.ejs", {
+									image_links: image_list,
+									title: title,
+									description: description,
+									scroller: scroll
+								});
+							});
 					});
-				});
-		});
-	} else {
-		res.redirect('/login');
-	}
-});
+				} else {
+					res.redirect('/home');
+				}
+			});
+		} else {
+			res.redirect('/login');
+		}
+	});
 
 
 /* Image Page
+	- Image scroller page
+	- Shows one image for 2 seconds then moves to the next
 */
-app.get('/folders/:folder/images', [check('folder').trim().blacklist(blacklist).replace(' ', '')], function (req, res) {
-	let folder = req.params.folder;
-	if (req.session.loggedin) {
-		folder = req.params.folder;
-		query_string = "SELECT * FROM folders  WHERE folder_name = '" + folder + "'";
-		img_pool.query(query_string, (err, resp) => {
-			getImageAlbum(resp.rows[0].imgur_album_id)
-				.then((image_list) => {
-					var title = resp.rows[0].display_name;
-					res.render("pages/images.ejs", {
-						image_links: image_list,
-						title: title,
+app.get('/:server/:folder/images', [
+	check('server').trim().blacklist(blacklist).replace(' ', ''),
+	check('folder').trim().blacklist(blacklist).replace(' ', '')],
+	function (req, res) {
+		let folder = req.params.folder;
+		let server = req.params.server;
+		if (req.session.loggedin) {
+			can_access(server, req.session.username).then((access) => {
+				if (access) {
+					folder = req.params.folder;
+					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = '" + folder + "'";
+					img_pool.query(query_string, (err, resp) => {
+						getImageAlbum(resp.rows[0].imgur_album_id)
+							.then((image_list) => {
+								var title = resp.rows[0].display_name;
+								res.render("pages/images.ejs", {
+									image_links: image_list,
+									title: title,
+								});
+							});
 					});
-				});
-		});
-	} else {
-		res.redirect('/login');
-	}
-});
+				} else {
+					res.redirect('/home');
+				}
+			});
+		} else {
+			res.redirect('/login');
+		}
+	});
 
 
 app.get('*', function (req, res) {
