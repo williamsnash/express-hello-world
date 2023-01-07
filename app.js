@@ -303,7 +303,8 @@ app.get('/home', function (req, res) {
 			}
 
 			res.render('pages/home.ejs', {
-				folders: servers
+				folders: servers,
+				user: req.session.username
 			});
 		});
 	} else {
@@ -325,21 +326,22 @@ app.get('/:server', [
 				if (access) {
 					query_string = 'SELECT folder_name, display_name FROM ' + server.toLowerCase();
 					img_pool.query(query_string, (err, resp) => {
-						if (resp.rows.length >= 0) {
+						if (resp.rows.length > 0) {
+							let folder_list = [];
+							let display_list = [];
+							for (const row of resp.rows) {
+								folder_list.push(row.folder_name);
+								display_list.push(row.display_name);
+							}
+
+							res.render('pages/folders.ejs', {
+								server: server,
+								folders: folder_list.sort(),
+								display: display_list.sort()
+							});
+						} else {
 							res.redirect('/home');
 						}
-						let folder_list = [];
-						let display_list = [];
-						for (const row of resp.rows) {
-							folder_list.push(row.folder_name);
-							display_list.push(row.display_name);
-						}
-
-						res.render('pages/folders.ejs', {
-							server: server,
-							folders: folder_list.sort(),
-							display: display_list.sort()
-						});
 					});
 				} else {
 					res.redirect('/home');
