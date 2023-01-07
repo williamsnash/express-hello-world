@@ -64,27 +64,27 @@ var options = {
 }
 app.use(express.static('public', options))
 
-if (process.env.CACHING.toLocaleLowerCase() == 'on') {
-	console.log("Caching is enabled");
-	const cache = new NodeCache({ stdTTL: 120 });
-	// This setup caches for the browser
-	app.use((req, res, next) => { // Cache the responses
-		const cachedBody = cache.get(req.url);
-		if (cachedBody) {
-			res.send(cachedBody);
-			return;
-		} else {
-			res.sendResponse = res.send;
-			res.send = body => {
-				cache.set(req.url, body);
-				res.sendResponse(body);
-			}
-			next();
-		}
-	});
-} else {
-	console.log("Caching is disabled");
-}
+// if (process.env.CACHING.toLocaleLowerCase() == 'on') {
+// 	console.log("Caching is enabled");
+// 	const cache = new NodeCache({ stdTTL: 120 });
+// 	// This setup caches for the browser
+// 	app.use((req, res, next) => { // Cache the responses
+// 		const cachedBody = cache.get(req.url);
+// 		if (cachedBody) {
+// 			res.send(cachedBody);
+// 			return;
+// 		} else {
+// 			res.sendResponse = res.send;
+// 			res.send = body => {
+// 				cache.set(req.url, body);
+// 				res.sendResponse(body);
+// 			}
+// 			next();
+// 		}
+// 	});
+// } else {
+// 	console.log("Caching is disabled");
+// }
 
 
 // ############################ Get Images ####################################
@@ -262,16 +262,19 @@ app.get('/logout', function (request, response) {
 */
 app.get('/folders', function (req, res) {
 	if (req.session.loggedin) {
-		query_string = 'SELECT folder_name FROM folders';
+		query_string = 'SELECT folder_name, display_name FROM folders';
 		img_pool.query(query_string, (err, resp) => {
 
 			let folder_list = [];
+			let display_list = [];
 			for (const row of resp.rows) {
 				folder_list.push(row.folder_name);
+				display_list.push(row.display_name);
 			}
 
 			res.render('pages/folders.ejs', {
-				folders: folder_list,
+				folders: folder_list.sort(),
+				display: display_list.sort()
 			});
 		});
 	} else {
@@ -333,6 +336,12 @@ app.get('/folders/:folder/images', [check('folder').trim().blacklist(blacklist).
 	}
 });
 
+
+app.get('*', function (req, res) {
+	console.log('404ing');
+	res.render('pages/404.ejs');
+	// res.send('404');
+});
 
 // ################################# Export #################################
 module.exports = app

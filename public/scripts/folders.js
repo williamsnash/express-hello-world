@@ -1,14 +1,20 @@
-function loadFolders(folderList) {
+function loadFolders(folderList, displayList) {
     const folderLists = folderList.split(',');
+    const displayLists = displayList.split(',');
+    let folderSet = {};
     const folderContainer = document.getElementById("folderNavi");
-    for (const folder of folderLists) {
+    for (let i = 0; i < folderLists.length; i++) {
+        folderSet[folderLists[i]] = displayLists[i];
+    }
+    // console.table(folderSet);
+    for (let key in folderSet) {
         const divBox = document.createElement("div");
         divBox.className = "link";
         const a = document.createElement("a");
-        const linkText = document.createTextNode(folder);
+        const linkText = document.createTextNode(folderSet[key]);
         a.appendChild(linkText);
-        a.title = folder;
-        a.href = "/folders/" + folder;
+        a.title = folderSet[key];
+        a.href = "/folders/" + key;
         divBox.appendChild(a);
         folderContainer.appendChild(divBox);
     }
