@@ -325,7 +325,9 @@ app.get('/:server', [
 				if (access) {
 					query_string = 'SELECT folder_name, display_name FROM ' + server.toLowerCase();
 					img_pool.query(query_string, (err, resp) => {
-
+						if (resp.rows.length >= 0) {
+							res.redirect('/home');
+						}
 						let folder_list = [];
 						let display_list = [];
 						for (const row of resp.rows) {
