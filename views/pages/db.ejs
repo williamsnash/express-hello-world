@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Database</title>
+    <link href="/css/db.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+    <h1>Database</h1>
+    <h3 class="err_msg">
+        <%= err_msg %>
+    </h3>
+    <h3 class="succ_msg">
+        <%= succ_msg %>
+    </h3>
+    <div class="db">
+        <table>
+            <tr>
+                <th>Server Name</th>
+                <th>Can Access</th>
+            </tr>
+            <% for (var i=0; i < servers.length; i++) { %>
+                <tr>
+                    <td>
+                        <%= servers[i].server_name %>
+                    </td>
+                    <td>
+                        <%= servers[i].can_access %>
+                    </td>
+                </tr>
+                <% } %>
+        </table>
+    </div>
+    <div class="update">
+        <form action="/db/<%= user %>/update_user" method="post">
+            <table>
+                <tr>
+                    <th>Change Type</th>
+                    <th>Server Name</th>
+                    <th>Can Access</th>
+
+                </tr>
+                <tr>
+                    <th>
+                        <input type="radio" id="add" name="action_type" value="add">
+                        <label for="add_server">Add</label><br>
+                        <input type="radio" id="delete" name="action_type" value="delete">
+                        <label for="delete_server">Delete</label><br>
+                    </th>
+                    <th>
+                        <!-- <label for="server_name">Server Name:</label> -->
+                        <input type="text" id="server_name" name="server_name" placeholder="Server Name">
+                    </th>
+                    <th>
+                        <!-- <label for="can_access">Can Access:</label> -->
+                        <input type="text" id="can_access" name="can_access" placeholder="Can Access">
+                    </th>
+                </tr>
+
+            </table>
+            <input type="submit" value="Update">
+        </form>
+    </div>
+</body>
+
+</html>
+
+<!-- <form action="/db/<%= user %>/update_user" method="post">
+    <label for="server_name">Server Name:</label>
+    <input type="text" id="server_name" name="server_name" placeholder="Server Name">
+    <label for="can_access">Can Access:</label>
+    <input type="text" id="can_access" name="can_access" placeholder="Can Access">
+    <input type="submit" value="Update">
+</form> -->
+
+
+<!-- <tr>
+    <th>Delete Server</th>
+    <form action="/db/<%= user %>/update_user" method="post">
+        <th>
+            <input type="text" id="server_name" name="server_name" placeholder="Server Name">
+        </th>
+        <th>
+            <input type="text" id="can_access" name="can_access" placeholder="Can Access">
+        </th>
+        <th>
+            <input type="submit" value="Update">
+        </th>
+    </form>
+</tr> -->

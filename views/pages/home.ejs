@@ -4,16 +4,17 @@
 <head>
     <title>Folders</title>
     <link rel="stylesheet" href="/css/folders.css">
-    <script type="text/javascript" src="/scripts/folders.js"></script>
+    <script type="text/javascript" src="/scripts/home.js"></script>
     <link rel="icon" href="/favicon/favicon.ico" />
 </head>
 
 <body>
     <div class="header">
-        <h1>This will be nicer and dynamic later</h1>
+        <h1>
+            Welcome, <%= user%>
+        </h1>
         <h2>Click to navigate</h2>
-        <p>
-            <a href="/logout">Logout</a>
+        <a href="/logout">Logout</a>
         </p>
     </div>
     <div class="simple">
@@ -21,7 +22,7 @@
         </h3>
         <script>
             window.onload = function () {
-                loadFolders("<%= server %>", "<%= folders %>", "<%= display %>")
+                loadFolders("<%= folders %>")
             }
         </script>
     </div>

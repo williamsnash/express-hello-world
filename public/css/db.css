@@ -1,0 +1,51 @@
+body {
+    background-color: black;
+    color: white;
+}
+
+
+h1 {
+    text-align: center;
+}
+
+.err_msg {
+    color: red;
+    font-weight: bold;
+    text-align: center;
+}
+
+.succ_msg {
+    color: green;
+    font-weight: bold;
+    text-align: center;
+}
+
+table {
+    border-collapse: collapse;
+    /* collapses cell borders */
+    width: 100%;
+    /* sets the table to take up the full width of the container */
+}
+
+th,
+td {
+    border: 1px solid black;
+    /* adds a border to the cells */
+    text-align: left;
+    /* aligns the text in the cells to the left */
+    padding: 8px;
+    /* adds padding to the cells */
+}
+
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+    color: black
+        /* adds a background color to every even-numbered row */
+}
+
+th {
+    background-color: #4caf50;
+    /* adds a background color to the table header */
+    color: white;
+    /* makes the text in the table header white */
+}
