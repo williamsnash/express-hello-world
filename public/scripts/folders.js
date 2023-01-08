@@ -1,7 +1,4 @@
 function loadFolders(server, folderList, displayList) {
-    console.log(server)
-    console.log(folderList)
-    console.log(displayList)
     const folderLists = folderList.split(',');
     const displayLists = displayList.split(',');
     let folderSet = {};
