@@ -18,6 +18,7 @@ const clientId = process.env.CLIENT_ID;
 	- Stores the user information
 	- Id, username, password, email
 */
+console.table([process.env.USER, process.env.DB]);
 const pool = new Pool({
 	user: process.env.USER,
 	host: 'db.bit.io',
