@@ -50,6 +50,7 @@ app.use(session({
 }));
 
 app.use(express.json());
+app.disable('x-powered-by');
 app.use(express.urlencoded({ extended: true }));
 // This configures static hosting for files in /public that have the extensions
 // listed in the array.
