@@ -49,3 +49,12 @@ th {
     color: white;
     /* makes the text in the table header white */
 }
+
+
+.return,
+.return:link,
+.return:visited {
+    text-decoration: none;
+    text-align: center;
+    color: white;
+}

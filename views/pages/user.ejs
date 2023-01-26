@@ -3,7 +3,7 @@
 
 <head>
     <title>Database</title>
-    <link href="/css/db.css" rel="stylesheet" type="text/css">
+    <link href="/css/admin.css" rel="stylesheet" type="text/css">
 </head>
 
 <body>
@@ -13,6 +13,9 @@
     </h3>
     <h3 class="succ_msg">
         <%= succ_msg %>
+    </h3>
+    <h3 class="return">
+        <a href="/users">Users Table</a>
     </h3>
     <div class="db">
         <table>
@@ -33,7 +36,7 @@
         </table>
     </div>
     <div class="update">
-        <form action="/db/<%= user %>/update_user" method="post">
+        <form action="/users/<%= user %>/update_user" method="post">
             <table>
                 <tr>
                     <th>Change Type</th>
@@ -42,25 +45,36 @@
 
                 </tr>
                 <tr>
-                    <th>
-                        <input type="radio" id="add" name="action_type" value="add">
+                    <td>
+                        <input type="radio" id="add" name="action_type" value="add" onclick="add_server()">
                         <label for="add_server">Add</label><br>
-                        <input type="radio" id="delete" name="action_type" value="delete">
+                        <input type="radio" id="delete" name="action_type" value="delete" onclick="delete_server()">
                         <label for="delete_server">Delete</label><br>
-                    </th>
-                    <th>
+                    </td>
+                    <td>
                         <!-- <label for="server_name">Server Name:</label> -->
                         <input type="text" id="server_name" name="server_name" placeholder="Server Name">
-                    </th>
-                    <th>
+                    </td>
+                    <td>
                         <!-- <label for="can_access">Can Access:</label> -->
                         <input type="text" id="can_access" name="can_access" placeholder="Can Access">
-                    </th>
+
+                    </td>
                 </tr>
 
             </table>
             <input type="submit" value="Update">
         </form>
+        <script>
+            function delete_server() {
+                document.getElementById("can_access").disabled = true;
+                document.getElementById("can_access").style.backgroundColor = "#CCCCCC";
+            }
+            function add_server() {
+                document.getElementById("can_access").disabled = false;
+                document.getElementById("can_access").style.backgroundColor = "";
+            }
+        </script>
     </div>
 </body>
 

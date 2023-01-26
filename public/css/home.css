@@ -1,3 +1,8 @@
+hr.headerLine {
+    border: 1px solid rgb(236, 236, 236);
+    width: 50%;
+}
+
 .header {
     text-align: center;
     padding: 35px;
@@ -6,21 +11,6 @@
     border-color: white;
     border-style: solid;
     margin: 0.5%;
-}
-
-.header:hover {
-    border: solid transparent;
-    border-image: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
-    border-image-slice: 1;
-    border-radius: 50%;
-}
-
-
-.header_link,
-.header_link:link,
-.header_link:visited {
-    text-decoration: none;
-    color: white;
 }
 
 body {

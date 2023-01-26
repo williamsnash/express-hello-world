@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Database</title>
+    <link href="/css/admin.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+    <h1>Database</h1>
+    <h3 class="err_msg">
+        <%= err_msg_admin %>
+    </h3>
+    <h3 class="succ_msg">
+        <%= succ_msg_admin %>
+    </h3>
+    <h3 class="return">
+        <a href="/home">Home</a>
+    </h3>
+    <div class="db">
+        <table>
+            <tr>
+                <th>User</th>
+                <th>Delete?</th>
+            </tr>
+            <% for (var i=0; i < accounts.length; i++) { %>
+                <tr>
+                    <td>
+                        <a href="users/<%= accounts[i] %>">
+                            <%= accounts[i] %>
+                    </td>
+                    <td>
+                        <form action="/users/<%= accounts[i] %>/delete" method="POST">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <input type="submit" value="Delete">
+                        </form>
+                    </td>
+                </tr>
+                <% } %>
+        </table>
+    </div>
+</body>
+
+</html>
