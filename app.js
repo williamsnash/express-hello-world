@@ -185,7 +185,10 @@ app.post('/auth', [
 					request.session.loggedin = true;
 					request.session.username = username;
 					// Redirect to home page
-					response.redirect('/home');
+					// response.redirect('/home');
+					console.log("Redirecting to: " + request.session.returnURL);
+					response.redirect(request.session.returnURL || '/home');
+					request.session.returnURL = null;
 				} else {
 					request.session.err_msg = "Incorrect Username and/or Password!";
 					response.redirect('/login');
@@ -212,6 +215,7 @@ app.get('/add_user', function (request, response) {
 			err_msg: msg
 		});
 	} else {
+		request.session.returnURL = '/add_user';
 		response.redirect('/login');
 	}
 });
@@ -271,6 +275,7 @@ app.post('/send_user', [
 			response.end();
 		}
 	} else {
+		req.session.returnURL = '/add_user';
 		response.redirect('/login');
 	}
 });
@@ -315,7 +320,7 @@ function can_access(server, username) {
 }
 
 
-app.get('/users', function (req, res) {
+app.get('/admin', function (req, res) {
 	if (req.session.loggedin) {
 		if (req.session.username == 'admin') {
 			query_string = 'SELECT username FROM accounts';
@@ -334,6 +339,7 @@ app.get('/users', function (req, res) {
 			res.redirect('/home');
 		}
 	} else {
+		req.session.returnURL = '/admin';
 		res.redirect('/login');
 	}
 
@@ -345,29 +351,6 @@ app.get('/users', function (req, res) {
 	- Gets the list of users from the db
 	- Links to /db/:user
 */
-// app.get('/db', function (req, res) {
-// 	if (req.session.loggedin) {
-// 		if (req.session.username == 'admin') {
-// 			query_string = 'SELECT username FROM accounts';
-// 			let accounts = []
-// 			pool.query(query_string, (error, results) => {
-// 				for (let row of results.rows) {
-// 					accounts.push(row.username);
-// 				}
-// 				let send_data = '<h1>Admin Page</h1><table><tr><th>Username</th></tr>';
-// 				for (let account of accounts) {
-// 					send_data = send_data + '<tr><th><a href="/db/' + account + '">' + account + '</th></tr>';
-// 				}
-// 				send_data = send_data + '</table>';
-// 				res.send(send_data);
-// 			});
-// 		} else {
-// 			res.redirect('/home');
-// 		}
-// 	} else {
-// 		res.redirect('/login');
-// 	}
-// });
 
 /* Admin page for a specific user
 	- Gets the list of servers that the user has access to
@@ -413,6 +396,7 @@ app.get('/users/:user', [
 				res.redirect('/home');
 			}
 		} else {
+			req.session.returnURL = '/users/' + req.params.user;
 			res.redirect('/login');
 		}
 	});
@@ -448,6 +432,9 @@ app.post('/users/:username/delete', check('user').trim().blacklist(blacklist).re
 
 
 		}
+	} else {
+		req.session.returnURL = '/users/' + req.params.user;
+		res.redirect('/login');
 	}
 });
 
@@ -519,6 +506,9 @@ app.post('/users/:user/update_user', [
 					response.redirect('/users/' + user);
 				}
 			}
+		} else {
+			request.session.returnURL = '/users/' + request.params.user;
+			response.redirect('/login');
 		}
 	});
 
@@ -538,9 +528,12 @@ app.get('/home', function (req, res) {
 					servers.push(row.server_name);
 				}
 			}
+			if (req.session.username == 'admin') {
+				servers.unshift('admin');
+			}
 
 			res.render('pages/home.ejs', {
-				folders: servers,
+				servers: servers,
 				user: req.session.username
 			});
 		});
@@ -557,8 +550,7 @@ app.get('/home', function (req, res) {
 app.get('/:server', [
 	check('server').trim().blacklist(blacklist).replace(' ', '')],
 	function (req, res) {
-		let server = req.params.server;
-
+		const server = req.params.server;
 		if (req.session.loggedin) {
 			can_access(server, req.session.username).then((access) => {
 				if (access) {
@@ -571,11 +563,10 @@ app.get('/:server', [
 								folder_list.push(row.folder_name);
 								display_list.push(row.display_name);
 							}
-
 							res.render('pages/folders.ejs', {
 								server: server,
 								folders: folder_list.sort(),
-								display: display_list.sort()
+								display: display_list.sort(),
 							});
 						} else {
 							res.redirect('/home');
@@ -586,6 +577,7 @@ app.get('/:server', [
 				}
 			});
 		} else {
+			req.session.returnTo = '/' + server;
 			res.redirect('/login');
 		}
 	});
@@ -600,9 +592,9 @@ app.get('/:server/:folder', [
 	check('server').trim().blacklist(blacklist).replace(' ', ''),
 	check('folder').trim().blacklist(blacklist).replace(' ', '')],
 	function (req, res) {
+		let folder = req.params.folder;
+		const server = req.params.server;
 		if (req.session.loggedin) {
-			let folder = req.params.folder;
-			let server = req.params.server;
 			can_access(server, req.session.username).then((access) => {
 				if (access) {
 					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = $1";
@@ -618,7 +610,8 @@ app.get('/:server/:folder', [
 									image_links: image_list,
 									title: title,
 									description: description,
-									scroller: scroll
+									scroller: scroll,
+									backlink: server
 								});
 							});
 					});
@@ -627,6 +620,7 @@ app.get('/:server/:folder', [
 				}
 			});
 		} else {
+			req.session.returnURL = '/' + server + '/' + folder;
 			res.redirect('/login');
 		}
 	});
@@ -653,6 +647,7 @@ app.get('/:server/:folder/images', [
 								res.render("pages/images.ejs", {
 									image_links: image_list,
 									title: title,
+									backlink: '/' + server + '/' + folder
 								});
 							});
 					});
@@ -661,6 +656,7 @@ app.get('/:server/:folder/images', [
 				}
 			});
 		} else {
+			req.session.returnURL = '/' + server + '/' + folder + '/images';
 			res.redirect('/login');
 		}
 	});
