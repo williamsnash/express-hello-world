@@ -57,10 +57,7 @@ var options = {
 	dotfiles: 'ignore',
 	etag: false,
 	extensions: ['htm', 'html', 'css', 'js', 'ico', 'jpg', 'jpeg', 'png', 'svg'],
-	index: ['index.html'],
 	maxAge: '1m',
-	redirect: false,
-	folder: '/public'
 }
 app.use(express.static('public', options))
 
@@ -138,6 +135,8 @@ function getImageAlbum(albumId) {
 	- /:server -- Displays all folders in the server
 	- /:server/:folder -- Displays all image in the "folder"
 */
+
+
 //	### Auth Routing ###
 
 /* Login Page
@@ -145,6 +144,10 @@ function getImageAlbum(albumId) {
 	- Reset the error message session variable, after sending it to the template
 	- https://codeshack.io/basic-login-system-nodejs-express-mysql/
 */
+app.get('/', function (request, response) {
+	response.redirect('/login');
+});
+
 app.get('/login', function (request, response) {
 	// Render login template
 	let msg = request.session.err_msg;
@@ -169,9 +172,11 @@ app.post('/auth', [
 	let password = request.body.password;
 	if (username && password) {
 		// Execute SQL query that'll select the account from the database based on the specified username and password
-		query_string = "SELECT * FROM accounts WHERE username = '" + username + "' AND password = '" + password + "'";
+		// query_string = "SELECT * FROM accounts WHERE username = '" + username + "' AND password = '" + password + "'";
+		let query_string = "SELECT * FROM accounts WHERE username = $1 AND password = $2";
 		pool.query(
 			query_string,
+			[username, password],
 			function (error, results, fields) {
 				if (error) throw error;
 				if (results.rows.length > 0) {
@@ -199,10 +204,14 @@ app.post('/auth', [
 */
 app.get('/add_user', function (request, response) {
 	// Render login template
+	let msg = request.session.err_msg;
+	request.session.err_msg = null;
 	if (request.session.loggedin) {
-		response.render('pages/add_user.ejs');
+		response.render('pages/add_user.ejs', {
+			err_msg: msg
+		});
 	} else {
-		request.redirect('/login');
+		response.redirect('/login');
 	}
 });
 //Adds new user
@@ -228,9 +237,10 @@ app.post('/send_user', [
 			query_string = "SELECT MAX(id) FROM accounts"; //Gets the current highest id
 			pool.query(query_string, (err, res) => {
 				id = res.rows[0].max + 1;
-				query_string = "INSERT INTO accounts  (id, username, password, email) VALUES ('" + id + "', '" + username + "', '" + password + "', '" + email + "')";
+				let query_string_account = "INSERT INTO accounts (id, username, password, email) VALUES ($1, $2, $3, $4)";
 				pool_write.query(
-					query_string,
+					query_string_account,
+					[id, username, password, email],
 					function (error, results, fields) {
 						// If there is an issue with the query, output the error
 						if (error) throw error;
@@ -238,8 +248,23 @@ app.post('/send_user', [
 						console.log(results);
 						response.end();
 					});
+
+				// Create new user table
+				let query_string_table = 'CREATE TABLE ' + username + ' (server_name text,can_access text)';
+				pool_write.query(
+					query_string_table,
+					function (error, results, fields) {
+						// If there is an issue with the query, output the error
+						if (error) throw error;
+						// If the account exists
+						console.log(results);
+						response.end();
+					});
+
+				pool_write.end(); // End the connection to the database
+				response.redirect('/users');
 			});
-			pool_write.end(); // End the connection to the database
+
 		} else {
 			response.send('Please enter Username and Password!');
 			response.end();
@@ -269,26 +294,27 @@ app.get('/logout', function (request, response) {
 */
 function can_access(server, username) {
 	return new Promise((resolve, reject) => {
-		query_string = 'SELECT * FROM ' + username + ' WHERE server_name = \'' + server.toLowerCase() + '\'';
-		pool.query(query_string, (err, resp) => {
-			if (resp.rows.length > 0) {
-				if (resp.rows[0].can_access == 'true') {
-					resolve(true);
+		// let query_string = 'SELECT * FROM ' + username + ' WHERE server_name = \'' + server.toLowerCase() + '\'';
+		let query_string = 'SELECT * FROM ' + username + ' WHERE server_name = $1';
+		pool.query(query_string,
+			[server.toLowerCase()],
+			function (error, resp, fields) {
+				if (error) throw error;
+				if (resp.rows.length > 0) {
+					if (resp.rows[0].can_access == 'true') {
+						resolve(true);
+					} else {
+						resolve(false);
+					}
 				} else {
 					resolve(false);
 				}
-			} else {
-				resolve(false);
-			}
-		});
+			});
 	});
 }
 
-/* Admin page
-	- Gets the list of users from the db
-	- Links to /db/:user
-*/
-app.get('/db', function (req, res) {
+
+app.get('/users', function (req, res) {
 	if (req.session.loggedin) {
 		if (req.session.username == 'admin') {
 			query_string = 'SELECT username FROM accounts';
@@ -297,12 +323,11 @@ app.get('/db', function (req, res) {
 				for (let row of results.rows) {
 					accounts.push(row.username);
 				}
-				let send_data = '<h1>Admin Page</h1><table><tr><th>Username</th></tr>';
-				for (let account of accounts) {
-					send_data = send_data + '<tr><th><a href="/db/' + account + '">' + account + '</th></tr>';
-				}
-				send_data = send_data + '</table>';
-				res.send(send_data);
+				res.render('pages/admin', {
+					accounts: accounts,
+					err_msg_admin: '',
+					succ_msg_admin: ''
+				});
 			});
 		} else {
 			res.redirect('/home');
@@ -310,13 +335,45 @@ app.get('/db', function (req, res) {
 	} else {
 		res.redirect('/login');
 	}
+
+
 });
+
+
+/* Admin page
+	- Gets the list of users from the db
+	- Links to /db/:user
+*/
+// app.get('/db', function (req, res) {
+// 	if (req.session.loggedin) {
+// 		if (req.session.username == 'admin') {
+// 			query_string = 'SELECT username FROM accounts';
+// 			let accounts = []
+// 			pool.query(query_string, (error, results) => {
+// 				for (let row of results.rows) {
+// 					accounts.push(row.username);
+// 				}
+// 				let send_data = '<h1>Admin Page</h1><table><tr><th>Username</th></tr>';
+// 				for (let account of accounts) {
+// 					send_data = send_data + '<tr><th><a href="/db/' + account + '">' + account + '</th></tr>';
+// 				}
+// 				send_data = send_data + '</table>';
+// 				res.send(send_data);
+// 			});
+// 		} else {
+// 			res.redirect('/home');
+// 		}
+// 	} else {
+// 		res.redirect('/login');
+// 	}
+// });
 
 /* Admin page for a specific user
 	- Gets the list of servers that the user has access to
 	- Allows the admin to add or remove access to a server
 */
-app.get('/db/:user', [
+app.get('/users/:user', [
+	check('user').trim().blacklist(blacklist).replace(' ', ''),
 	check('server').trim().blacklist(blacklist).replace(' ', '')],
 	function (req, res) {
 		if (req.session.loggedin) {
@@ -344,7 +401,7 @@ app.get('/db/:user', [
 						data.push(dict)
 					}
 
-					res.render('pages/db.ejs', {
+					res.render('pages/user.ejs', {
 						servers: data,
 						user: user,
 						err_msg: err_db_msg,
@@ -359,12 +416,46 @@ app.get('/db/:user', [
 		}
 	});
 
+app.post('/users/:username/delete', check('user').trim().blacklist(blacklist).replace(' ', ''), function (req, res) {
+	if (req.session.loggedin) {
+		if (req.session.username == 'admin') {
+			const pool_write = new Pool({
+				user: process.env.USER_WRITE,
+				host: 'db.bit.io',
+				database: process.env.DB, // public database 
+				password: process.env.PASSWD_WRITE, // key from bit.io database page connect menu
+				port: 5432,
+				ssl: true,
+			});
+			let username = req.params.username;
+			query_string = "DELETE FROM accounts WHERE username= $1";
+			pool_write.query(query_string, [username], (error, results) => { // Delete user from accounts table
+				// console.log("Delete user from accounts: " + results);
+			});
+
+			query_string = 'DROP TABLE ' + username;
+			pool_write.query(query_string, (error, results) => { // Delete user from accounts table
+				// console.log("Drop user table: " + results);
+			});
+
+			run()
+			async function run() {
+				await new Promise(resolve => setTimeout(resolve, 300));;
+				pool_write.end();
+				res.redirect('/users');
+			}
+
+
+		}
+	}
+});
+
 /* rung_query(query_string)
 	-  Runs a query on the write database
 
 	-param: query_string - the query to run
 */
-function run_query(query_string) {
+function run_query(query_string, args) {
 	const pool_write = new Pool({
 		user: process.env.USER_WRITE,
 		host: 'db.bit.io',
@@ -376,6 +467,7 @@ function run_query(query_string) {
 
 	pool_write.query(
 		query_string,
+		args,
 		function (error, results, fields) {
 			if (error) throw error;
 		});
@@ -384,14 +476,14 @@ function run_query(query_string) {
 
 /* Updates the user's access to a server
 */
-app.post('/db/:user/update_user', [
+app.post('/users/:user/update_user', [
 	check('user').trim().blacklist(blacklist).replace(' ', ''),
 	check('server_name').isLength({ min: 1 }).trim().escape().blacklist(blacklist).replace(' ', ''),
 	check('can_access').isLength({ min: 1 }).trim().blacklist(blacklist).replace(' ', ''),
 	check('action_type').isLength({ min: 1 }).trim().blacklist(blacklist).replace(' ', '')],
 	function (request, response) {
-		if (req.session.loggedin) {
-			if (req.session.username == 'admin') {
+		if (request.session.loggedin) {
+			if (request.session.username == 'admin') {
 				let server_name = request.body.server_name;
 				let can_access = request.body.can_access;
 				let user = request.params.user;
@@ -399,16 +491,20 @@ app.post('/db/:user/update_user', [
 
 				if (action_type.toLowerCase() == 'add') {
 					if (server_name && can_access) {
-						query_string = "INSERT INTO " + user + " (server_name, can_access) VALUES ('" + server_name + "', '" + can_access + "')";
-						run_query(query_string);
-						request.session.succ_msg_db = 'Successfully added server to database!';
+						if (can_access.toLowerCase() == 'true' || can_access.toLowerCase() == 'false') {
+							query_string = "INSERT INTO " + user + " (server_name, can_access) VALUES ($1, $2)";
+							run_query(query_string, [server_name, can_access]);
+							request.session.succ_msg_db = 'Successfully added server to database!';
+						} else {
+							request.session.err_msg_db = "Can access must be 'true' or 'false'!";
+						}
 					} else {
 						request.session.err_msg_db = 'Please enter server name and if they can access the server!';
 					}
 				} else if (action_type.toLowerCase() == 'delete') {
 					if (server_name) {
-						query_string = 'DELETE FROM ' + user + ' WHERE server_name = \'' + server_name + '\'';
-						run_query(query_string);
+						query_string = 'DELETE FROM ' + user + ' WHERE server_name = $1';
+						run_query(query_string, [server_name]);
 						request.session.succ_msg_db = 'Successfully deleted server from database!';
 					} else {
 						request.session.err_msg_db = 'Please enter Server name!';
@@ -419,7 +515,7 @@ app.post('/db/:user/update_user', [
 				run()
 				async function run() {
 					await new Promise(resolve => setTimeout(resolve, 200));;
-					response.redirect('/db/' + user);
+					response.redirect('/users/' + user);
 				}
 			}
 		}
@@ -508,8 +604,8 @@ app.get('/:server/:folder', [
 			let server = req.params.server;
 			can_access(server, req.session.username).then((access) => {
 				if (access) {
-					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = '" + folder + "'";
-					img_pool.query(query_string, (err, resp) => {
+					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = $1";
+					img_pool.query(query_string, [folder], (err, resp) => {
 						//Lines 334-342: Gets images from imgur
 						getImageAlbum(resp.rows[0].imgur_album_id)
 							.then((image_list) => {
@@ -534,7 +630,6 @@ app.get('/:server/:folder', [
 		}
 	});
 
-
 /* Image Page
 	- Image scroller page
 	- Shows one image for 2 seconds then moves to the next
@@ -549,8 +644,8 @@ app.get('/:server/:folder/images', [
 			can_access(server, req.session.username).then((access) => {
 				if (access) {
 					folder = req.params.folder;
-					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = '" + folder + "'";
-					img_pool.query(query_string, (err, resp) => {
+					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = $1";
+					img_pool.query(query_string, [folder], (err, resp) => {
 						getImageAlbum(resp.rows[0].imgur_album_id)
 							.then((image_list) => {
 								var title = resp.rows[0].display_name;
@@ -568,12 +663,6 @@ app.get('/:server/:folder/images', [
 			res.redirect('/login');
 		}
 	});
-
-// app.get('*', function (req, res) {
-// 	console.log('404ing');
-// 	res.render('pages/404.ejs');
-// 	// res.send('404');
-// });
 
 // ################################# Export #################################
 module.exports = app

@@ -53,7 +53,6 @@ hr.headerLine {
 /* Create four equal columns that sits next to each other */
 .column {
     -ms-flex: 25%;
-    /* IE10 */
     flex: 50%;
     max-width: 25%;
     padding: 0 1px;
