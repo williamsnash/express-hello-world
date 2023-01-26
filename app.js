@@ -489,7 +489,7 @@ app.post('/users/:user/update_user', [
 				let user = request.params.user;
 				let action_type = request.body.action_type;
 
-				if (action_type.toLowerCase() == 'add') {
+				if (action_type == 'add') {
 					if (server_name && can_access) {
 						if (can_access.toLowerCase() == 'true' || can_access.toLowerCase() == 'false') {
 							query_string = "INSERT INTO " + user + " (server_name, can_access) VALUES ($1, $2)";
@@ -501,7 +501,7 @@ app.post('/users/:user/update_user', [
 					} else {
 						request.session.err_msg_db = 'Please enter server name and if they can access the server!';
 					}
-				} else if (action_type.toLowerCase() == 'delete') {
+				} else if (action_type == 'delete') {
 					if (server_name) {
 						query_string = 'DELETE FROM ' + user + ' WHERE server_name = $1';
 						run_query(query_string, [server_name]);
