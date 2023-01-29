@@ -26,11 +26,11 @@
             <% for (var i=0; i < accounts.length; i++) { %>
                 <tr>
                     <td>
-                        <a href="users/<%= accounts[i] %>">
+                        <a href="admin/<%= accounts[i] %>">
                             <%= accounts[i] %>
                     </td>
                     <td>
-                        <form action="/users/<%= accounts[i] %>/delete" method="POST">
+                        <form action="/admin/<%= accounts[i] %>/delete" method="POST">
                             <input type="hidden" name="_method" value="DELETE">
                             <input type="submit" value="Delete">
                         </form>
@@ -38,6 +38,36 @@
                 </tr>
                 <% } %>
         </table>
+    </div>
+    <hr>
+    <div>
+        <h2 class="add_user">Add User</h2>
+        <form action="/send_user" method="post">
+            <table>
+                <tr>
+                    <th>Username</th>
+                    <th>Password</th>
+                    <th>Email</th>
+                    <th>Submit</th>
+
+                </tr>
+                <tr>
+                    <td>
+                        <input type="text" id="username" name="username" placeholder="Username" required>
+                    </td>
+                    <td>
+                        <input type="password" id="password" name="password" placeholder="Password" required>
+
+                    </td>
+                    <td>
+                        <input type="email" id="email" name="email" placeholder="email@email.com">
+                    </td>
+                    <td>
+                        <input type="submit" value="Submit">
+                    </td>
+                </tr>
+            </table>
+        </form>
     </div>
 </body>
 

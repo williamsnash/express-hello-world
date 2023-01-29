@@ -48,19 +48,18 @@ app.use(session({
 	resave: true,
 	saveUninitialized: true
 }));
-
-app.use(express.json());
 app.disable('x-powered-by');
-app.use(express.urlencoded({ extended: true }));
-// This configures static hosting for files in /public that have the extensions
-// listed in the array.
+
 var options = {
 	dotfiles: 'ignore',
 	etag: false,
 	extensions: ['htm', 'html', 'css', 'js', 'ico', 'jpg', 'jpeg', 'png', 'svg'],
 	maxAge: '1m',
 }
-app.use(express.static('public', options))
+app.use(express.json(),
+	express.urlencoded({ extended: true }),
+	express.static('public', options)
+);
 
 // if (process.env.CACHING.toLocaleLowerCase() == 'on') {
 // 	console.log("Caching is enabled");
@@ -84,71 +83,22 @@ app.use(express.static('public', options))
 // 	console.log("Caching is disabled");
 // }
 
-
-// ############################ Get Images ####################################
-/* getImageAlbum
-	- Gets all images in a imgur album by id
-	
-	- param: albumId - the id of the album
-	- return: image_list - the list of images in the album
-*/
-function getImageAlbum(albumId) {
-	// console.log("Getting album: " + albumId);
-	const options = {
-		url: `https://api.imgur.com/3/album/${albumId}`,
-		headers: {
-			'Authorization': `Client-ID ${clientId}`
-		}
-	};
-	let image_list = [];
-	return new Promise((resolve, reject) => {
-		request(options, (error, response, body) => {
-			if (error) {
-				console.error("GetImage: " + error);
-			} else {
-				try {
-					const data = JSON.parse(body);
-					for (const image of data.data.images) {
-						image_list.push(image.link);
-					}
-					// image_list = image_list.split(',');
-					resolve(image_list);
-				} catch (e) {
-					// console.error(e);
-					console.error("ERROR ALBUM: " + e);
-					throw new Error('Throw makes it go boom!')
-				}
-			}
-		});
-
-	});
-}
-
 // ################################ Routing ########################################
 
-/* Everything below this is for routing
-	
-	- / -- home page
-	- /login -- login page
-	- /auth -- authenticates the user
-	- /logout -- logs the user out
-	- /home -- displays what server the user can access
-	- /:server -- Displays all folders in the server
-	- /:server/:folder -- Displays all image in the "folder"
-*/
+// A list of characters that are not allowed in the input fields
+const blacklist = '\'\"\/\<\>\;'
 
+// ######### Main Routing #########
 
-//	### Auth Routing ###
+app.get('/', function (request, response) {
+	response.redirect('/login');
+});
 
 /* Login Page
 	- Renders the login page / login users in
 	- Reset the error message session variable, after sending it to the template
 	- https://codeshack.io/basic-login-system-nodejs-express-mysql/
 */
-app.get('/', function (request, response) {
-	response.redirect('/login');
-});
-
 app.get('/login', function (request, response) {
 	// Render login template
 	let msg = request.session.err_msg;
@@ -156,11 +106,7 @@ app.get('/login', function (request, response) {
 	response.render('pages/login.ejs', {
 		err_msg: msg
 	});
-
 });
-
-// A list of characters that are not allowed in the input fields
-const blacklist = '\'\"\/\<\>\;'
 
 // auth
 //	- Authenticates the user
@@ -172,8 +118,6 @@ app.post('/auth', [
 	let username = request.body.username;
 	let password = request.body.password;
 	if (username && password) {
-		// Execute SQL query that'll select the account from the database based on the specified username and password
-		// query_string = "SELECT * FROM accounts WHERE username = '" + username + "' AND password = '" + password + "'";
 		let query_string = "SELECT * FROM accounts WHERE username = $1 AND password = $2";
 		pool.query(
 			query_string,
@@ -184,8 +128,6 @@ app.post('/auth', [
 					// Authenticate the user
 					request.session.loggedin = true;
 					request.session.username = username;
-					// Redirect to home page
-					// response.redirect('/home');
 					console.log("Redirecting to: " + request.session.returnURL);
 					response.redirect(request.session.returnURL || '/home');
 					request.session.returnURL = null;
@@ -202,84 +144,6 @@ app.post('/auth', [
 	}
 });
 
-/* Add user Page
-	- Renders the add user page
-	
-*/
-app.get('/add_user', function (request, response) {
-	// Render login template
-	let msg = request.session.err_msg;
-	request.session.err_msg = null;
-	if (request.session.loggedin) {
-		response.render('pages/add_user.ejs', {
-			err_msg: msg
-		});
-	} else {
-		request.session.returnURL = '/add_user';
-		response.redirect('/login');
-	}
-});
-//Adds new user
-app.post('/send_user', [
-	check('username').isLength({ min: 5 }).trim().escape().blacklist(blacklist).replace(' ', ''),
-	check('password').isLength({ min: 5 }).trim().blacklist(blacklist).replace(' ', ''),
-	check('email').isEmail().trim().normalizeEmail()
-], function (request, response) {
-	if (request.session.loggedin) {
-		let username = request.body.username;
-		let password = request.body.password;
-		let email = request.body.email;
-		if (username && password) {
-			//Connect to the database with the db write user
-			const pool_write = new Pool({
-				user: process.env.USER_WRITE,
-				host: 'db.bit.io',
-				database: process.env.DB, // public database 
-				password: process.env.PASSWD_WRITE, // key from bit.io database page connect menu
-				port: 5432,
-				ssl: true,
-			});
-			query_string = "SELECT MAX(id) FROM accounts"; //Gets the current highest id
-			pool.query(query_string, (err, res) => {
-				id = res.rows[0].max + 1;
-				let query_string_account = "INSERT INTO accounts (id, username, password, email) VALUES ($1, $2, $3, $4)";
-				pool_write.query(
-					query_string_account,
-					[id, username, password, email],
-					function (error, results, fields) {
-						// If there is an issue with the query, output the error
-						if (error) throw error;
-						// If the account exists
-						console.log(results);
-						response.end();
-					});
-
-				// Create new user table
-				let query_string_table = 'CREATE TABLE ' + username + ' (server_name text,can_access text)';
-				pool_write.query(
-					query_string_table,
-					function (error, results, fields) {
-						// If there is an issue with the query, output the error
-						if (error) throw error;
-						// If the account exists
-						console.log(results);
-						response.end();
-					});
-
-				pool_write.end(); // End the connection to the database
-				response.redirect('/users');
-			});
-
-		} else {
-			response.send('Please enter Username and Password!');
-			response.end();
-		}
-	} else {
-		req.session.returnURL = '/add_user';
-		response.redirect('/login');
-	}
-});
-
 app.get('/logout', function (request, response) {
 	request.session.loggedin = false;
 	request.session.username = null;
@@ -288,159 +152,28 @@ app.get('/logout', function (request, response) {
 
 // ######### Main Routing #########
 
-/* can_access
-	- Checks if the user has access to the server
-
-	- params: server - The server name
-	- params: username - The username of the user
-
-	- returns: A promise that resolves to- 
-				true if the user has access to the server,
-				false otherwise
+/* Admin Routing
+	- /admin
+	- /admin/:user
+	- /admin/:user/delete
+	- /send_user
 */
-function can_access(server, username) {
-	return new Promise((resolve, reject) => {
-		// let query_string = 'SELECT * FROM ' + username + ' WHERE server_name = \'' + server.toLowerCase() + '\'';
-		let query_string = 'SELECT * FROM ' + username + ' WHERE server_name = $1';
-		pool.query(query_string,
-			[server.toLowerCase()],
-			function (error, resp, fields) {
-				if (error) throw error;
-				if (resp.rows.length > 0) {
-					if (resp.rows[0].can_access == 'true') {
-						resolve(true);
-					} else {
-						resolve(false);
-					}
-				} else {
-					resolve(false);
-				}
-			});
-	});
-}
+require('./routes/admin.js')(app, pool, blacklist);
 
-
-app.get('/admin', function (req, res) {
-	if (req.session.loggedin) {
-		if (req.session.username == 'admin') {
-			query_string = 'SELECT username FROM accounts';
-			let accounts = []
-			pool.query(query_string, (error, results) => {
-				for (let row of results.rows) {
-					accounts.push(row.username);
-				}
-				res.render('pages/admin', {
-					accounts: accounts,
-					err_msg_admin: '',
-					succ_msg_admin: ''
-				});
-			});
-		} else {
-			res.redirect('/home');
-		}
-	} else {
-		req.session.returnURL = '/admin';
-		res.redirect('/login');
-	}
-
-
-});
-
-
-/* Admin page
-	- Gets the list of users from the db
-	- Links to /db/:user
+/* Home Routing
+	- /home
 */
+require('./routes/home.js')(app, pool);
 
-/* Admin page for a specific user
-	- Gets the list of servers that the user has access to
-	- Allows the admin to add or remove access to a server
+/* Server Routing
+	- /:server
+	- /:server/:folder
+	- /:server/:folder/images
 */
-app.get('/users/:user', [
-	check('user').trim().blacklist(blacklist).replace(' ', ''),
-	check('server').trim().blacklist(blacklist).replace(' ', '')],
-	function (req, res) {
-		if (req.session.loggedin) {
-			if (req.session.username == 'admin') {
-				let err_db_msg;
-				let succ_db_msg;
-				if (req.session.err_msg_db) {
-					err_db_msg = req.session.err_msg_db;
-					req.session.err_msg_db = null;
-				} else {
-					succ_db_msg = req.session.succ_msg_db;
-					req.session.succ_msg_db = null;
-				}
+require('./routes/servers.js')(app, pool, img_pool, blacklist, clientId);
 
-				// Select all rows from the table
-				let user = req.params.user;
-				query_string = 'SELECT * FROM ' + user
-				pool.query(query_string, (error, results) => {
-					if (error) throw error;
-					let data = [] // List of dicts
-					for (let row of results.rows) {
-						let dict = {}
-						dict['server_name'] = row.server_name
-						dict['can_access'] = row.can_access
-						data.push(dict)
-					}
-
-					res.render('pages/user.ejs', {
-						servers: data,
-						user: user,
-						err_msg: err_db_msg,
-						succ_msg: succ_db_msg
-					});
-				});
-			} else {
-				res.redirect('/home');
-			}
-		} else {
-			req.session.returnURL = '/users/' + req.params.user;
-			res.redirect('/login');
-		}
-	});
-
-app.post('/users/:username/delete', check('user').trim().blacklist(blacklist).replace(' ', ''), function (req, res) {
-	if (req.session.loggedin) {
-		if (req.session.username == 'admin') {
-			const pool_write = new Pool({
-				user: process.env.USER_WRITE,
-				host: 'db.bit.io',
-				database: process.env.DB, // public database 
-				password: process.env.PASSWD_WRITE, // key from bit.io database page connect menu
-				port: 5432,
-				ssl: true,
-			});
-			let username = req.params.username;
-			query_string = "DELETE FROM accounts WHERE username= $1";
-			pool_write.query(query_string, [username], (error, results) => { // Delete user from accounts table
-				// console.log("Delete user from accounts: " + results);
-			});
-
-			query_string = 'DROP TABLE ' + username;
-			pool_write.query(query_string, (error, results) => { // Delete user from accounts table
-				// console.log("Drop user table: " + results);
-			});
-
-			run()
-			async function run() {
-				await new Promise(resolve => setTimeout(resolve, 300));;
-				pool_write.end();
-				res.redirect('/users');
-			}
-
-
-		}
-	} else {
-		req.session.returnURL = '/users/' + req.params.user;
-		res.redirect('/login');
-	}
-});
-
-/* rung_query(query_string)
+/* run_query(query_string)
 	-  Runs a query on the write database
-
 	-param: query_string - the query to run
 */
 function run_query(query_string, args) {
@@ -511,155 +244,5 @@ app.post('/users/:user/update_user', [
 			response.redirect('/login');
 		}
 	});
-
-/* Server Home Page
-	- Renders the home page
-	- Queries the database for the servers that the user has access to
-*/
-app.get('/home', function (req, res) {
-	if (req.session.loggedin) {
-		query_string = 'SELECT * FROM ' + req.session.username;
-		pool.query(query_string, (err, resp) => {
-			// console.table(resp.rows);
-			let servers = [];
-			for (const row of resp.rows) {
-				if (row.can_access.toLowerCase() == 'true') {
-					// console.log(row.server_name);
-					servers.push(row.server_name);
-				}
-			}
-			if (req.session.username == 'admin') {
-				servers.unshift('admin');
-			}
-
-			res.render('pages/home.ejs', {
-				servers: servers,
-				user: req.session.username
-			});
-		});
-	} else {
-		res.redirect('/login');
-	}
-});
-
-/* Folder page
-	- Waits for data from db to be loaded in, then renders the index.html
-
-	- Checks if the user is logged in, then gets the folders from the image db
-*/
-app.get('/:server', [
-	check('server').trim().blacklist(blacklist).replace(' ', '')],
-	function (req, res) {
-		const server = req.params.server;
-		if (req.session.loggedin) {
-			can_access(server, req.session.username).then((access) => {
-				if (access) {
-					query_string = 'SELECT folder_name, display_name FROM ' + server.toLowerCase();
-					img_pool.query(query_string, (err, resp) => {
-						if (resp.rows.length > 0) {
-							let folder_list = [];
-							let display_list = [];
-							for (const row of resp.rows) {
-								folder_list.push(row.folder_name);
-								display_list.push(row.display_name);
-							}
-							res.render('pages/folders.ejs', {
-								server: server,
-								folders: folder_list.sort(),
-								display: display_list.sort(),
-							});
-						} else {
-							res.redirect('/home');
-						}
-					});
-				} else {
-					res.redirect('/home');
-				}
-			});
-		} else {
-			req.session.returnTo = '/' + server;
-			res.redirect('/login');
-		}
-	});
-
-/* Folder page
-	- Gets the folder name from the url and renders the template_grid.ejs
-
-	- Checks if the user is logged in, then gets the folder data from the image db
-	- Then gets the images from the corresponding imgur album
-*/
-app.get('/:server/:folder', [
-	check('server').trim().blacklist(blacklist).replace(' ', ''),
-	check('folder').trim().blacklist(blacklist).replace(' ', '')],
-	function (req, res) {
-		let folder = req.params.folder;
-		const server = req.params.server;
-		if (req.session.loggedin) {
-			can_access(server, req.session.username).then((access) => {
-				if (access) {
-					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = $1";
-					img_pool.query(query_string, [folder], (err, resp) => {
-						//Lines 334-342: Gets images from imgur
-						getImageAlbum(resp.rows[0].imgur_album_id)
-							.then((image_list) => {
-								var scroll = folder + '/images'
-								var title = resp.rows[0].display_name;
-								var description = resp.rows[0].description;
-								const isMobile = browser(req.headers['user-agent']).mobile;
-								res.render(isMobile ? "pages/template_grid_mobile.ejs" : "pages/template_grid.ejs", {
-									image_links: image_list,
-									title: title,
-									description: description,
-									scroller: scroll,
-									backlink: server
-								});
-							});
-					});
-				} else {
-					res.redirect('/home');
-				}
-			});
-		} else {
-			req.session.returnURL = '/' + server + '/' + folder;
-			res.redirect('/login');
-		}
-	});
-
-/* Image Page
-	- Image scroller page
-	- Shows one image for 2 seconds then moves to the next
-*/
-app.get('/:server/:folder/images', [
-	check('server').trim().blacklist(blacklist).replace(' ', ''),
-	check('folder').trim().blacklist(blacklist).replace(' ', '')],
-	function (req, res) {
-		let folder = req.params.folder;
-		let server = req.params.server;
-		if (req.session.loggedin) {
-			can_access(server, req.session.username).then((access) => {
-				if (access) {
-					folder = req.params.folder;
-					query_string = "SELECT * FROM " + server.toLowerCase() + " WHERE folder_name = $1";
-					img_pool.query(query_string, [folder], (err, resp) => {
-						getImageAlbum(resp.rows[0].imgur_album_id)
-							.then((image_list) => {
-								var title = resp.rows[0].display_name;
-								res.render("pages/images.ejs", {
-									image_links: image_list,
-									title: title,
-									backlink: '/' + server + '/' + folder
-								});
-							});
-					});
-				} else {
-					res.redirect('/home');
-				}
-			});
-		} else {
-			req.session.returnURL = '/' + server + '/' + folder + '/images';
-			res.redirect('/login');
-		}
-	});
-
 // ################################# Export #################################
 module.exports = app

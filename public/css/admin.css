@@ -20,6 +20,10 @@ h1 {
     text-align: center;
 }
 
+.add_user {
+    text-align: center;
+}
+
 table {
     border-collapse: collapse;
     /* collapses cell borders */
