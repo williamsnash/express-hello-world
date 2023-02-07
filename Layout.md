@@ -40,9 +40,9 @@ This file contains all pages in the site including their css and scripts. Used t
 
 ---
 
-## /users
+## /admin
 
-### Description: Allows for the admin user to manage and delete users, links to the user server access pages
+### Description: Allows for the admin user to manage, add, and delete users. Links to the user server access pages
 <br>Html: [admin.ejs](views/pages/admin.ejs)
 <br>CSS: [admin.css](public/css/admin.css)
 <br>Scripts: N/A
@@ -55,11 +55,11 @@ This file contains all pages in the site including their css and scripts. Used t
 <br>Scripts: N/A
 
 ---
-## /add_user
-### Description: Allows for the admin user to add a new user
-<br>Html: [add_user.ejs](views/pages/add_user.ejs)
-<br>CSS: [login.css](public/css/login.css)
-<br>Scripts: N/A
+## ~~/add_user~~
+### ~~Description: Allows for the admin user to add a new user~~
+<br>~~Html: [add_user.ejs](views/pages/add_user.ejs)~~
+<br>~~CSS: [login.css](public/css/login.css)~~
+<br>~~Scripts: N/A~~
 
 ---
 # POST Request
